@@ -12,9 +12,13 @@ import "@chainlink/contracts/src/v0.6/vendor/SafeMathChainlink.sol";
 //prevents integer overflow with solidity versions 8 >
 
 contract FundMe{
+    using SafeMathChainlink for uint256;
+    //it will use SafeMathChainLink for uint256, doesn't allow for integer overflow 
+    //Using Keyword: tThe directive using A for B; can be used to attach library functions (from the library A) to any type (B) in the context of a contract 
 
 
     mapping(address => uint256) public addressToAmountFunded;
+    address[] public funders;
     address public owner; 
     
     constructor() public {
@@ -34,7 +38,8 @@ contract FundMe{
         addressToAmountFunded[msg.sender] += msg.value;
         // msg.sender and msg.value are keywords in every contract call/transaction 
         // msg. sender is the sender of the function call 
-        //msg.value is how much they sent  
+        //msg.value is how much they sent
+        funders.push(msg.sender);  
 
     }
     function getVersion() public view returns(uint256){
@@ -54,16 +59,27 @@ contract FundMe{
         return ethAmountInUsd;
 
     }
+    //A modifier is used to change the behavior of a function in a declarative way 
     modifier onlyOwner{
-        
+        require(msg.sender == owner, "we can put our reason here for the failure");
+        //this will run prior to the execution of the function
+        _;
+        //this underscore means to run the rest of the code 
     }
 
-    function withdraw() payable public{
-        require(msg.sender == owner);
+    function withdraw() payable public onlyOwner{ 
+        
         msg.sender.transfer(address(this).balance);
         //this is a keyword in solidity, when ever you type "this", it refers to the 
         // current contract that you are on in solidity 
-        //whoever calls the contract will be msg.sender 
+        //whoever calls the contract will be msg.sender
+        for (uint256 funderIndex = 0; funderIndex < funders.length; funderIndex++){
+            address funder = funders[funderIndex];
+            addressToAmountFunded[funder] = 0;
+
+        }
+        funders = new address[](0);
+        //this is a function call to set the Array to something blank  
 
     }
 }
