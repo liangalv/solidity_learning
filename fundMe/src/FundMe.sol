@@ -12,8 +12,10 @@ contract FundMe {
     mapping(address => uint256) private s_addressToAmountFunded;
     address[] private s_funders;
 
-    // Could we make this constant?  /* hint: no! We should make it immutable! */
-    address private /* immutable */ i_owner;
+    //Immutable variables are not stored in storage
+    //They are computed and set at deployment time which hardcodes their value into the bytecode of a contract
+    address private immutable i_owner; //Immutable variables can only be declared during contract deployment
+    //constants are actually deprecated, they too are hardcoded into bytecode, but can only encompass primitives
     uint256 public constant MINIMUM_USD = 5 * 10 ** 18;
 
     AggregatorV3Interface private s_priceFeed;
@@ -37,6 +39,17 @@ contract FundMe {
         // require(msg.sender == owner);
         if (msg.sender != i_owner) revert NotOwner();
         _;
+    }
+
+    function cheaperWithdrawl() public onlyOwner{
+        uint256 len = s_funders.length;
+        for (uint256 funderIndex = 0; funderIndex < len; funderIndex++) {
+            s_addressToAmountFunded[s_funders[funderIndex]] = 0;
+        }
+        //The 0 specifies the length of the array
+        s_funders = new address[](0);
+        (bool succ, ) = payable(msg.sender).call{value: address(this).balance}("");
+        require(succ, "call failed");
     }
     
     function withdraw() public onlyOwner {
