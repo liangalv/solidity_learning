@@ -45,7 +45,7 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     address payable[] private s_players;
     uint256 private s_lastTimestamp;
     address private s_recentWinner;
-    RaffleState s_raffleState;
+    RaffleState private s_raffleState;
 
     /**Events */
     event EnteredRaffle(address indexed player);
@@ -163,7 +163,17 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     }
 
     /**Getter functions */
-    function getEntranceFee() public view returns (uint256) {
+    function getEntranceFee() external view returns (uint256) {
         return i_entranceFee;
+    }
+
+    function getRaffleState() external view returns (RaffleState) {
+        return s_raffleState;
+    }
+
+    function getPlayer(
+        uint256 indexOfPlayer
+    ) external view returns (address payable) {
+        return s_players[indexOfPlayer];
     }
 }
