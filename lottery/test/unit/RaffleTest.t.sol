@@ -3,8 +3,10 @@ pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
 import {DeployRaffle} from "../../script/DeployRaffle.s.sol";
+import {VRFCoordinatorV2Mock} from "@chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol";
 import {Raffle} from "../../src/Raffle.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
+import {Vm} from "forge-std/Vm.sol";
 
 contract RaffleTest is Test {
     Raffle raffle;
@@ -35,6 +37,17 @@ contract RaffleTest is Test {
             linkTokenContract
         ) = helperConfig.activeNetworkConfig();
         vm.deal(PLAYER, STARTING_USER_BALANCE);
+    }
+
+    modifier enterRaffle() {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        _;
+    }
+    modifier advanceTime() {
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+        _;
     }
 
     function test_RaffleIntializesInOpenState() public view {
@@ -86,5 +99,144 @@ contract RaffleTest is Test {
         vm.expectRevert(Raffle.Raffle__RaffleNotOpen.selector);
         vm.prank(PLAYER);
         raffle.enterRaffle{value: entranceFee}();
+    }
+
+    /////////////////
+    // checkUpKeep //
+    /////////////////
+
+    function test_checkUpKeepReturnsFalseIfIthasNoBalance() public {
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+
+        (bool upkeepNeeded, ) = raffle.checkUpkeep("");
+        assert(!upkeepNeeded);
+    }
+
+    function test_checkUpKeepReturnsFalseIfRaffleNotOpen() public {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        vm.warp(block.timestamp + interval + 1);
+        vm.roll(block.number + 1);
+
+        raffle.performUpkeep("");
+        (bool upkeepNeeded, ) = raffle.checkUpkeep("");
+
+        assert(!upkeepNeeded);
+    }
+
+    function test_checkUpkeepReturnsFalseIfNotEnoughTimeHasPassed()
+        public
+        enterRaffle
+    {
+        (bool upkeepNeeded, ) = raffle.checkUpkeep("");
+        assert(!upkeepNeeded);
+    }
+
+    function test_checkUpkeepReturnsTrueWhenParametersAreValid()
+        public
+        enterRaffle
+        advanceTime
+    {
+        (bool upkeepNeeded, ) = raffle.checkUpkeep("");
+        assert(upkeepNeeded);
+    }
+
+    ///////////////////
+    // performUpKeep //
+    ///////////////////
+
+    function test_PerformUpkeepCanOnlyRunIfPerformUpkeepIsTrue()
+        public
+        enterRaffle
+        advanceTime
+    {
+        raffle.performUpkeep("");
+        assert(raffle.getRaffleState() == Raffle.RaffleState.CALCULATING);
+    }
+
+    function test_PerformUpkeepRevertsIfCheckUpkeepIsFalse() public {
+        uint256 currentBalance = 0;
+        uint256 numPlayers = 0;
+        uint256 raffleState = 0;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Raffle.Raffle__UpkeepNotNeeded.selector,
+                currentBalance,
+                numPlayers,
+                raffleState
+            )
+        );
+        raffle.performUpkeep("");
+    }
+
+    function test_PerformUpkeepUpdatesRaffleStateandEmitsEvent()
+        public
+        enterRaffle
+        advanceTime
+    {
+        //soldity contracts don't have access to emitted events and their topics
+        //vm.recordLogs records all emitted events
+        vm.recordLogs();
+        raffle.performUpkeep(""); //going to emit the requestId
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        //In the topics array the event itself is the event itself
+        bytes32 requestId = entries[1].topics[1];
+
+        console.log("RequestId: ", uint256(requestId));
+        assert(uint256(requestId) > 0);
+    }
+
+    /////////////////////////
+    // fullfillRandomWords //
+    /////////////////////////
+
+    //FuzzTesting
+    //Forge will run any test that takes at least one paramter as a property based test
+    //Property based testing is a way of testing general behaviours as opposed to isolated scenarios
+
+    function testFuzz_FullFillRandomWordsCanOnlyBeCalledAfterPerformUpkeep(
+        uint256 randomRequestId
+    ) public enterRaffle advanceTime {
+        vm.expectRevert("nonexistent request");
+        VRFCoordinatorV2Mock(vrfCoordinator).fulfillRandomWords(
+            randomRequestId,
+            address(raffle)
+        );
+    }
+
+    function test_FullfillsRandomWordPicksWinnerResetsAndSendsMoney()
+        public
+        advanceTime
+        enterRaffle
+    {
+        uint256 additionalEntrants = 5;
+        uint256 startingIndex = 1;
+
+        for (uint256 i = startingIndex; i < additionalEntrants + 1; i++) {
+            //An Address has 20 bytes in Eth 160 bits -> 20bytes
+            address player = address(uint160(i));
+            //This both pranks and deals (ensures next call made by player, and funds)
+            hoax(player, 1 ether);
+            raffle.enterRaffle{value: entranceFee}();
+        }
+        uint256 previousTimeStamp = raffle.getLastTimeStamp();
+
+        vm.recordLogs();
+        raffle.performUpkeep(""); //going to emit the requestId
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        uint256 requestId = uint256(entries[1].topics[1]);
+
+        VRFCoordinatorV2Mock(vrfCoordinator).fulfillRandomWords(
+            requestId,
+            address(raffle)
+        );
+
+        assert(raffle.getRaffleState() == Raffle.RaffleState.OPEN);
+        assert(raffle.getRecentWinner() != address(0));
+        assert(raffle.getLengthOfPlayers() == 0);
+        assert(raffle.getLastTimeStamp() > previousTimeStamp);
     }
 }

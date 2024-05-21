@@ -18,7 +18,7 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     error Raffle__UpkeepNotNeeded(
         uint256 currentBalance,
         uint256 numPlayers,
-        uint256 rafffleState
+        uint256 raffleState
     );
     /**Type Declarations */
 
@@ -50,6 +50,7 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     /**Events */
     event EnteredRaffle(address indexed player);
     event PickedWinner(address indexed winner);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
     constructor(
         uint256 entranceFee,
@@ -101,7 +102,7 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
         override
         returns (bool upkeepNeeded, bytes memory /*performData*/)
     {
-        bool enoughTimePassed = (block.timestamp - s_lastTimestamp) >
+        bool enoughTimePassed = (block.timestamp - s_lastTimestamp) >=
             i_interval;
         bool raffleOpen = s_raffleState == RaffleState.OPEN;
         bool hasBalance = address(this).balance > 0;
@@ -135,13 +136,15 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
             revert();
         }
         s_raffleState = RaffleState.CALCULATING;
-        i_vrfCoordinator.requestRandomWords(
+        uint256 requestId = i_vrfCoordinator.requestRandomWords(
             i_gasLane,
             i_subscriptionId,
             REQUEST_CONFIRMATIONS,
             i_callbackGasLimit,
             NUM_WORDS
         );
+        //This is redundant because the VRF coordinator already emits an event that chainlink nodes pick up
+        emit RequestedRaffleWinner(requestId);
     }
 
     function fulfillRandomWords(
@@ -175,5 +178,17 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
         uint256 indexOfPlayer
     ) external view returns (address payable) {
         return s_players[indexOfPlayer];
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return s_recentWinner;
+    }
+
+    function getLengthOfPlayers() external view returns (uint256) {
+        return s_players.length;
+    }
+
+    function getLastTimeStamp() external view returns (uint256) {
+        return s_lastTimestamp;
     }
 }
