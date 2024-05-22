@@ -19,6 +19,7 @@ contract RaffleTest is Test {
     uint64 subscriptionId;
     uint32 callbackGasLimit;
     address linkTokenContract;
+    uint256 deployeKey;
 
     //This is one of the standard cheats
     address public PLAYER = makeAddr("player");
@@ -34,7 +35,8 @@ contract RaffleTest is Test {
             gasLane,
             subscriptionId,
             callbackGasLimit,
-            linkTokenContract
+            linkTokenContract,
+            deployeKey
         ) = helperConfig.activeNetworkConfig();
         vm.deal(PLAYER, STARTING_USER_BALANCE);
     }
@@ -206,7 +208,7 @@ contract RaffleTest is Test {
         );
     }
 
-    function test_FullfillsRandomWordPicksWinnerResetsAndSendsMoney()
+    function test_FullfillRandomWordPicksWinnerResetsAndSendsMoney()
         public
         advanceTime
         enterRaffle
@@ -214,11 +216,13 @@ contract RaffleTest is Test {
         uint256 additionalEntrants = 5;
         uint256 startingIndex = 1;
 
+        uint256 prize = additionalEntrants * entranceFee;
+
         for (uint256 i = startingIndex; i < additionalEntrants + 1; i++) {
             //An Address has 20 bytes in Eth 160 bits -> 20bytes
             address player = address(uint160(i));
             //This both pranks and deals (ensures next call made by player, and funds)
-            hoax(player, 1 ether);
+            hoax(player, STARTING_USER_BALANCE);
             raffle.enterRaffle{value: entranceFee}();
         }
         uint256 previousTimeStamp = raffle.getLastTimeStamp();
@@ -238,5 +242,9 @@ contract RaffleTest is Test {
         assert(raffle.getRecentWinner() != address(0));
         assert(raffle.getLengthOfPlayers() == 0);
         assert(raffle.getLastTimeStamp() > previousTimeStamp);
+        assert(
+            address(raffle.getRecentWinner()).balance ==
+                (STARTING_USER_BALANCE + prize)
+        );
     }
 }

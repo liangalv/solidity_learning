@@ -16,7 +16,8 @@ contract DeployRaffle is Script {
             bytes32 gasLane,
             uint64 subscriptionId,
             uint32 callbackGasLimit,
-            address linkTokenContract
+            address linkTokenContract,
+            uint256 deployerKey
         ) = helperConfig.activeNetworkConfig();
         //Create our subscription if we don't have one
         if (subscriptionId == 0) {
@@ -48,7 +49,8 @@ contract DeployRaffle is Script {
         addConsumer.addConsumer(
             address(raffle),
             vrfCoordinator,
-            subscriptionId
+            subscriptionId,
+            deployerKey
         );
         return (raffle, helperConfig);
     }

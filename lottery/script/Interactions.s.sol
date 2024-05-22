@@ -11,7 +11,7 @@ import {DevOpsTools} from "@foundry-devops/DevOpsTools.sol";
 contract CreateSubscription is Script {
     function createSubscriptionUsingConfig() public returns (uint64) {
         HelperConfig helperConfig = new HelperConfig();
-        (, , address vrfCoordinator, , , , ) = helperConfig
+        (, , address vrfCoordinator, , , , , ) = helperConfig
             .activeNetworkConfig();
         return createSubscription(vrfCoordinator);
     }
@@ -46,7 +46,8 @@ contract FundSubscription is Script {
             ,
             uint64 subId,
             ,
-            address link
+            address link,
+
         ) = helperConfig.activeNetworkConfig();
         fundSubscription(vrfCoordinator, subId, link);
     }
@@ -91,21 +92,31 @@ contract FundSubscription is Script {
 contract AddConsumer is Script {
     function addConsumerUsingConfig(address raffleAddress) public {
         HelperConfig helperConfig = new HelperConfig();
-        (, , address vrfCoordinator, , uint64 subId, , ) = helperConfig
-            .activeNetworkConfig();
-        addConsumer(raffleAddress, vrfCoordinator, subId);
+        (
+            ,
+            ,
+            address vrfCoordinator,
+            ,
+            uint64 subId,
+            ,
+            ,
+            uint256 deployerKey
+        ) = helperConfig.activeNetworkConfig();
+        addConsumer(raffleAddress, vrfCoordinator, subId, deployerKey);
     }
 
     function addConsumer(
         address raffleAddress,
         address vrfCoordinator,
-        uint64 subId
+        uint64 subId,
+        uint256 deployerKey
     ) public {
         console.log("Adding consumer contract: ", raffleAddress);
         console.log("Using vrfCoordinator: ", vrfCoordinator);
         console.log("On ChainID: ", block.chainid);
 
-        vm.startBroadcast();
+        //We're passing our private key here to have a particular account during this broadcast
+        vm.startBroadcast(deployerKey);
         VRFCoordinatorV2Mock(vrfCoordinator).addConsumer(subId, raffleAddress);
         vm.stopBroadcast();
     }
