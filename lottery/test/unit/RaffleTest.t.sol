@@ -194,13 +194,21 @@ contract RaffleTest is Test {
     // fullfillRandomWords //
     /////////////////////////
 
+    //Should be skipping tests that require a mock to fullfill random words on a legitmate testnet
+    modifier skipFork() {
+        if (block.chainid != 31337) {
+            return;
+        }
+        _;
+    }
+
     //FuzzTesting
     //Forge will run any test that takes at least one paramter as a property based test
     //Property based testing is a way of testing general behaviours as opposed to isolated scenarios
 
     function testFuzz_FullFillRandomWordsCanOnlyBeCalledAfterPerformUpkeep(
         uint256 randomRequestId
-    ) public enterRaffle advanceTime {
+    ) public enterRaffle advanceTime skipFork {
         vm.expectRevert("nonexistent request");
         VRFCoordinatorV2Mock(vrfCoordinator).fulfillRandomWords(
             randomRequestId,
@@ -212,6 +220,7 @@ contract RaffleTest is Test {
         public
         advanceTime
         enterRaffle
+        skipFork
     {
         uint256 additionalEntrants = 5;
         uint256 startingIndex = 1;
